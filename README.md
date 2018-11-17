@@ -16,7 +16,7 @@ Coded by Manos Kantzos (aka sly*m)
 
 R:Draw full curve
 
-P:Parameters (width=0 draws full)
+P:Parameters (width='max' draws full)
 
 O:Color plot (1=16 colors 2=all colors)
 
