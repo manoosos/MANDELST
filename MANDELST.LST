@@ -821,20 +821,7 @@ RETURN
 ' -------------------------------------------
 PROCEDURE print_zoom
   PRINT AT(1,2);"Zoom:";4/side
-  '  PRINT AT(1,24);SPC(39)
   PRINT AT(13,24);"Select Center"
-  ' PRINT AT(1,3);"real:";real
-  ' PRINT AT(1,4);"imag:";imag
-  ' PRINT AT(1,5);"side:";side
-  ' PRINT AT(1,3);"mandr:";mandr
-  ' PRINT AT(1,4);"mandi:";mandi
-  ' PRINT AT(1,5);"mandside:";mandside
-  ' PRINT AT(1,6);"startreal:";startreal
-  ' PRINT AT(1,7);"startimag:";startimag
-  ' PRINT AT(1,8);"startside:";startside
-  ' PRINT AT(1,9);"endreal:";endreal
-  ' PRINT AT(1,10);"endimag:";endimag
-  ' PRINT AT(1,11);"endside:";endside
 RETURN
 ' -------------------------------------------
 PROCEDURE set_colors
