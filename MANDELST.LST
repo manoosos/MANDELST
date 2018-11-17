@@ -224,9 +224,9 @@ PROCEDURE reset_fractal
   startside=side !first frame of zoom-complex plane width
   startreal=real !first frame of zoom-real
   startimag=imag !first frame of zoom-imaginary
-  endside=side   !first frame of zoom-complex plane width
-  endreal=real   !first frame of zoom-real
-  endimag=imag   !first frame of zoom-imaginary
+  endside=side   !last frame of zoom-complex plane width
+  endreal=real   !last frame of zoom-real
+  endimag=imag   !last frame of zoom-imaginary
 RETURN
 ' -------------------------------------------
 PROCEDURE save_picture(ext$)
