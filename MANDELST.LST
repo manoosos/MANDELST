@@ -1,0 +1,915 @@
+' ************************************************
+' ** The Mandelbrot-Julia Generator by sly*m    **
+' ** codeing started somewhere at the late 80's **
+' ** loosely revised in the 21st century :P     **
+' ************************************************
+DIM md%(320,200),md1%(320,200)
+ON BREAK
+DEFMOUSE 5
+' ** current drive number and directory **
+curdrv&=GEMDOS(&H19)
+curdir$=CHR$(curdrv&+65)+":\"    !root dir
+SELECT XBIOS(4)                  !getrez-only lorez allowed
+CASE 0
+  cols&=16
+  stscrw&=320
+  stscrh&=200
+CASE 1
+  ALERT 3,"| Better go| to lo rez!",1,"ikr...",ch
+  END
+CASE 2
+  ALERT 3,"| Black and white? | |   Really?",1,"Well...",ch
+  END
+ENDSELECT
+' -------
+' color mode:
+' "1": spread the escapes in 16 cols, "2": each escape it's own
+mulcol$="1"
+' ** Set initial values and correct picture position **
+aspect=stscrw&/stscrh&
+imgcols&=cols&-1
+picwidth&=40
+rectw&=INT(stscrw&/2)            !mouse rectangle dimensions
+recth&=INT(rectw&/aspect)
+maxiter&=15
+iteresc&=4                       !iterations escape value
+fracdraw=0                       !0 draws mandelbrot, 1 draws julia
+chval&=0                          !flag if an input changed a value
+break=0
+inp$=""
+GOSUB setup_screen_params
+GOSUB set_colors
+' ** The initial curve is drawn **
+GOSUB reset_fractal
+GOSUB reset_rect
+GOSUB draw_fractal
+' -------------------------------------------
+bigloop:
+break=0
+GRAPHMODE 3
+HIDEM
+MOUSE mx,my,mk
+IF mk=1 THEN
+  IF rectw&<stscrw&-20 THEN
+    rectw&=rectw&+1
+  ENDIF
+ENDIF
+IF mk=2 THEN
+  IF rectw&>30 THEN
+    rectw&=rectw&-1
+  ENDIF
+ENDIF
+GOSUB draw_rect
+k$=INKEY$
+IF LEN(k$)>1 THEN
+  key=CVI(k$)
+  IF key=98 THEN
+    GOSUB help
+  ENDIF
+ENDIF
+IF k$=" " THEN
+  break=0
+  GOSUB find_complex(mx,my,rectw&)
+  endside=side
+  endreal=real
+  endimag=imag
+  GOSUB draw_fractal
+ENDIF
+IF k$="p" OR k$="P" THEN
+  GOSUB set_params
+  IF chval&>0 THEN
+    GOSUB draw_fractal
+  ELSE
+    SPUT picture$
+    GOSUB erase_oldrect
+    GOSUB print_time
+  ENDIF
+ENDIF
+IF k$="c" OR k$="C" THEN
+  GOSUB set_color_mode(1)
+ENDIF
+IF k$="j" OR k$="J" THEN
+  IF fracdraw=0 THEN
+    GOSUB erase_oldrect
+    fracdraw=1
+    tempr=real
+    tempi=imag
+    tempside=side
+    tempwidth=picwidth&
+    tempmi&=maxiter&
+    tempcol$=mulcol$
+    GOSUB find_complex(mx,my,stscrw&)
+    julnumr=real
+    julnumi=imag
+    maxiter&=15
+    GOSUB reset_fractal
+    GOSUB draw_fractal
+  ENDIF
+ENDIF
+IF k$="m" OR k$="M" THEN
+  IF fracdraw=1 THEN
+    SPUT mandpic$
+    GOSUB erase_oldrect
+    real=tempr
+    imag=tempi
+    side=tempside
+    picwidth&=tempwidth
+    maxiter&=tempmi&
+    mulcol$=tempcol$
+    fracdraw=0
+    GOSUB setup_screen_params
+    GOSUB print_time
+  ENDIF
+ENDIF
+IF k$="s" OR k$="S" THEN
+  GOSUB save_picture("PI1")
+ENDIF
+IF k$="r" OR k$="R" THEN
+  GOSUB reset_fractal
+  GOSUB draw_fractal
+ENDIF
+IF k$="t" OR k$="T" THEN
+  IF picwidth&=stscrw& THEN
+    GOSUB save_picture("TIF")
+  ELSE
+    ALERT 3," |TIFF can be saved|on full rez only!|  (width:max)",1,"Oh...",ch
+  ENDIF
+ENDIF
+IF k$="l" OR k$="L" THEN
+  IF fracdraw=0 THEN
+    GOSUB erase_oldrect
+    tempr=real
+    tempi=imag
+    tempside=side
+    tempwidth=picwidth&
+    tempmi&=maxiter&
+    tempcol$=mulcol$
+    GOSUB make_julia_ani
+  ENDIF
+ENDIF
+IF k$="f" OR k$="F" THEN
+  ' first frame of zoom
+  startside=side
+  startreal=real
+  startimag=imag
+  PRINT AT(1,24);"This is the 1st frame of zoom"
+ENDIF
+IF k$="z" OR k$="Z" THEN
+  GOSUB fractal_zoom
+ENDIF
+IF k$<>CHR$(27) THEN
+  GOTO bigloop
+ENDIF
+ALERT 2," |    Quit!|Are You Sure?",2,"Yeah!|Naah...",ch
+IF ch=2 THEN
+  GOTO bigloop
+ENDIF
+END
+' -------------------------------------------
+PROCEDURE draw_fractal
+  IF fracdraw=0 THEN
+    mandr=real
+    mandi=imag
+    mandside=side
+    GOSUB draw_mandelbrot
+  ELSE
+    julgridr=real
+    julgridi=imag
+    julgridside=side
+    GOSUB draw_julia
+  ENDIF
+RETURN
+' -------------------------------------------
+PROCEDURE reset_rect
+  mx=-rectw&
+  my=-recth&
+  mk=0
+  GOSUB draw_rect
+RETURN
+' -------------------------------------------
+PROCEDURE erase_oldrect
+  PLOT old_mx,old_my
+  BOX old_rectx1,old_recty1,old_rectx2,old_recty2
+RETURN
+' -------------------------------------------
+PROCEDURE draw_rect
+  recth&=INT(rectw&/aspect)
+  rectx1=mx-(INT(rectw&/2))
+  rectx2=mx+(INT(rectw&/2))
+  recty1=my-(INT(recth&/2))
+  recty2=my+(INT(recth&/2))
+  IF rectx1<>old_rectx1 AND rectx2<>old_rectx2 AND recty1<>old_recty1 AND recty2<>old_recty2 THEN
+    GOSUB erase_oldrect
+    PLOT mx,my
+    BOX rectx1,recty1,rectx2,recty2
+    old_mx=mx
+    old_my=my
+    old_rectx1=rectx1
+    old_rectx2=rectx2
+    old_recty1=recty1
+    old_recty2=recty2
+  ENDIF
+RETURN
+' -------------------------------------------
+PROCEDURE reset_fractal
+  ' mandel is framed to look nice
+  side=3.75      !complex plane width
+  real=-0.4      !complex real
+  ' but julia should be centered to look nice
+  IF fracdraw=1 THEN
+    side=4      !complex plane width
+    real=0      !complex real
+  ENDIF
+  imag=0         !complex imaginary
+  startside=side !first frame of zoom-complex plane width
+  startreal=real !first frame of zoom-real
+  startimag=imag !first frame of zoom-imaginary
+  endside=side   !first frame of zoom-complex plane width
+  endreal=real   !first frame of zoom-real
+  endimag=imag   !first frame of zoom-imaginary
+RETURN
+' -------------------------------------------
+PROCEDURE save_picture(ext$)
+  fnam$=""
+  diskpath$=curdir$+"*."+ext$
+  DEFMOUSE 0
+  SHOWM
+  ~FSEL_INPUT(diskpath$,fnam$,button)
+  HIDEM
+  SPUT picture$
+  chrndx&=RINSTR(diskpath$,"\")
+  IF chrndx&>0 THEN
+    curdir$=LEFT$(diskpath$,chrndx&)
+  ENDIF
+  chrndx&=RINSTR(fnam$,".")
+  IF chrndx&>0 THEN
+    fnam$=LEFT$(fnam$,chrndx&-1)
+  ENDIF
+  fnam$=curdir$+fnam$+"."+ext$
+  IF button=1 THEN
+    SELECT ext$
+    CASE "PI1"
+      GOSUB save_degas(fnam$)
+    CASE "TIF"
+      GOSUB save_rgb(fnam$)
+    ENDSELECT
+  ENDIF
+  GOSUB erase_oldrect
+  GOSUB print_zoom
+  DEFMOUSE 5
+RETURN
+' -------------------------------------------
+PROCEDURE save_rgb(fil$)
+  IF fil$<>"" THEN
+    ext=RINSTR(fil$,".")
+    IF ext>0 THEN
+      fil$=LEFT$(fil$,ext-1)     !user could give a different extension
+    ENDIF
+    fil$=fil$+".TIF"             !but we must use the correct one
+    PRINT AT(1,1);"... Saving TIFF ..."
+    PRINT AT(1,2);fil$
+    IF DFREE(0)<196608 THEN
+      ALERT 3,"No Room On Disk!",1,"Oh!",ch
+      SPUT picture$
+    ELSE
+      s_red|=&H0
+      s_green|=&H0          !colors blue
+      s_blue|=&HFF
+      e_red|=&HFF
+      e_green|=&H90         !to gold
+      e_blue|=&H0
+      r_dif=s_red|-e_red|
+      r_step=r_dif/maxval
+      g_dif=s_green|-e_green|
+      g_step=g_dif/maxval
+      b_dif=s_blue|-e_blue|
+      b_step=b_dif/maxval
+      OPEN "O",#1,fil$
+      ' ------save tiff header----------
+      RESTORE tifhead
+      FOR t=1 TO 8
+        READ byte|
+        OUT #1,byte|
+      NEXT t
+      ' ------save rgb values-----------
+      FOR y=1 TO scrh&
+        FOR x=1 TO scrw&
+          i=md%(x,y)
+          IF i<maxval THEN
+            r_sub=i*r_step
+            g_sub=i*g_step
+            b_sub=i*b_step
+            r|=INT(s_red|-r_sub)
+            g|=INT(s_green|-g_sub)
+            b|=INT(s_blue|-b_sub)
+          ELSE
+            r|=0
+            g|=0
+            b|=0
+          ENDIF
+          OUT #1,r|
+          OUT #1,g|
+          OUT #1,b|
+        NEXT x
+      NEXT y
+      ' ------save tiff tail----------
+      RESTORE tiftail
+      FOR t=1 TO 368
+        READ byte|
+        OUT #1,byte|
+      NEXT t
+      ' ------save complete-----------
+      CLOSE #1
+      PRINT CHR$(7)
+      SPUT picture$
+      GOSUB print_zoom
+    ENDIF
+  ENDIF
+RETURN
+' -------------------------------------------
+PROCEDURE save_degas(fil$)
+  IF fil$<>"" THEN
+    SPUT picture$
+    ext=RINSTR(fil$,".")
+    IF ext>0 THEN
+      fil$=LEFT$(fil$,ext-1)     !user could give a different extension
+    ENDIF
+    fil$=fil$+".PI1"             !but we must use the correct one
+    PRINT AT(1,1);"...Saving PI1..."
+    PRINT AT(1,2);fil$
+    IF DFREE(0)<32768 THEN
+      ALERT 3,"No Room On Disk!",1,"Oh!",ch
+      SPUT picture$
+    ELSE
+      OPEN "O",#1,fil$
+      OUT #1,0
+      OUT #1,0
+      RESTORE palette
+      FOR t=1 TO 16
+        READ color&
+        highc|=INT(color&/256)
+        lowc|=color&-highc|*256
+        OUT #1,highc|
+        OUT #1,lowc|
+      NEXT t
+      FOR t=1 TO 32000
+        OUT #1,ASC(MID$(picture$,t,1))
+      NEXT t
+      CLOSE #1
+    ENDIF
+  ENDIF
+RETURN
+' -------------------------------------------
+PROCEDURE find_complex(x,y,w&)
+  x&=x+1
+  y&=y+1
+  real=real+((side/scrw&*scrw&/stscrw&*x&)-side/2)
+  imag=imag+((side/aspect/scrh&*scrh&/stscrh&*y&)-side/aspect/2)
+  side=side/scrw&*scrw&/stscrw&*w&
+RETURN
+' -------------------------------------------
+FUNCTION diff(VAR a,b)
+  dif=0
+  IF SGN(a)=-1 AND SGN(b)=-1 THEN
+    IF ABS(a)>ABS(b) THEN
+      dif=ABS(a)-ABS(b)
+    ELSE
+      dif=0-(ABS(b)-ABS(a))
+    ENDIF
+  ELSE
+    IF SGN(a)<>SGN(b) THEN
+      dif=ABS(a)+ABS(b)
+      IF SGN(b)=-1 THEN
+        dif=0-dif
+      ENDIF
+    ELSE
+      IF a>b THEN
+        dif=0-(a-b)
+      ELSE
+        dif=b-a
+      ENDIF
+    ENDIF
+  ENDIF
+  RETURN dif
+ENDFUNC
+' -------------------------------------------
+PROCEDURE make_julia_ani
+  PRINT AT(1,1);"---- SELECT PATH ----"
+  fnam$=""
+  diskpath$=curdir$+"*.PI1"
+  DEFMOUSE 0
+  ~FSEL_INPUT(diskpath$,fnam$,button)
+  HIDEM
+  SPUT picture$
+  IF button=0 THEN
+    GOTO endjulflm
+  ENDIF
+  chrndx&=RINSTR(diskpath$,"\")
+  IF chrndx&>0 THEN
+    curdir$=LEFT$(diskpath$,chrndx&)
+  ENDIF
+  DEFMOUSE 5
+  SHOWM
+j_f_start:
+  SPUT mandpic$
+  PRINT AT(1,1);"...JULIA ANIMATION... Draw the line!"
+  GRAPHMODE 3
+  DO
+    MOUSE mx,my,mk
+  LOOP UNTIL mk
+  IF MOUSEK=2 THEN
+    GOTO endjulflm
+  ELSE
+    ' reset real imag
+    real=tempr
+    imag=tempi
+    GOSUB find_complex(mx,my,stscrw&)
+    r_start=real
+    i_start=imag
+    s_x=mx
+    s_y=my
+    mx1=mx
+    my1=my
+    HIDEM
+    DO
+    LOOP UNTIL MOUSEK=0      !wait until mousek released
+    DO
+      MOUSE mx,my,mk
+      IF mx<>mx1 OR my<>my1 THEN
+        LINE s_x,s_y,mx1,my1
+        LINE s_x,s_y,mx,my
+        mx1=mx
+        my1=my
+      ENDIF
+    LOOP UNTIL mk=1
+    ' reset real imag
+    real=tempr
+    imag=tempi
+    GOSUB find_complex(mx,my,stscrw&)
+    r_end=real
+    i_end=imag
+    HIDEM
+    GOSUB messages("frms")
+    INPUT inp$
+    IF inp$<>"" THEN
+      frames=VAL(inp$)
+      IF frames>99 THEN
+        frames=99
+      ENDIF
+      IF frames<=0 THEN
+        GOTO exitjulflm
+      ENDIF
+      maxiter&=30                  !default for julia ani
+      fracdraw=1
+      GOSUB reset_fractal
+      julgridr=real
+      julgridi=imag
+      julgridside=side
+      GOSUB set_params
+      GOSUB set_color_mode(0)
+      r_step=@diff(r_start,r_end)/(frames-1)
+      i_step=@diff(i_start,i_end)/(frames-1)
+      julnumr=r_start
+      julnumi=i_start
+      FOR jfilm=1 TO frames
+        IF break=0 THEN
+          num$=STR$(jfilm)
+          IF LEN(num$)=1 THEN
+            num$="0"+num$
+          ENDIF
+          fnam$=curdir$+"julani"+num$+".PI1"
+          GOSUB draw_julia
+          GOSUB save_degas(fnam$)
+          julnumr=julnumr+r_step
+          julnumi=julnumi+i_step
+        ENDIF
+      NEXT jfilm
+    ENDIF
+  ENDIF
+endjulflm:
+  GRAPHMODE 1
+  PRINT AT(1,24);"End of Julia Animation"
+  PAUSE 50
+  GOSUB erase_oldrect
+  GOSUB print_time
+exitjulflm:
+RETURN
+' -------------------------------------------
+PROCEDURE set_color_mode(draw)
+  GOSUB messages("cmod")
+  INPUT inp$
+  IF inp$="" THEN
+    IF draw=1 THEN
+      SPUT picture$
+      GOSUB erase_oldrect
+      GOSUB print_time
+    ENDIF
+  ELSE
+    IF draw=0 THEN
+      mulcol$=inp$
+    ELSE
+      IF inp$<>mulcol$ THEN
+        mulcol$=inp$
+        GOSUB plot_array
+        GOSUB erase_oldrect
+        GOSUB print_zoom
+      ELSE
+        SPUT picture$
+        GOSUB erase_oldrect
+        GOSUB print_time
+      ENDIF
+    ENDIF
+  ENDIF
+RETURN
+' -------------------------------------------
+PROCEDURE set_params
+  chval&=0
+  GOSUB messages("wdth")
+  INPUT inp$
+  IF inp$="" THEN
+    pw=picwidth&
+  ELSE
+    chval&=chval& OR 1
+    IF inp$="max" OR inp$="MAX" THEN
+      pw=stscrw&
+    ELSE
+      pw=INT(VAL(inp$))
+    ENDIF
+  ENDIF
+  IF pw>stscrw& THEN
+    pw=stscrw&
+  ENDIF
+  IF pw<40 THEN
+    pw=40
+  ENDIF
+  GOSUB messages("iter")
+  INPUT inp$
+  maxiter=INT(VAL(inp$))
+  IF maxiter=<0 THEN
+    maxiter=maxiter&
+  ELSE
+    chval&=chval& OR 1
+  ENDIF
+  DO
+    k$=INKEY$
+  LOOP UNTIL INKEY$=""
+  picwidth&=INT(pw)
+  maxiter&=INT(maxiter)
+  GOSUB setup_screen_params
+RETURN
+' -------------------------------------------
+PROCEDURE setup_screen_params
+  scrw&=picwidth&
+  scrh&=INT(scrw&/aspect)
+RETURN
+' -------------------------------------------
+PROCEDURE fractal_zoom
+  chval&=0
+  IF startreal-endreal<>0 THEN
+    chval&=chval& OR 1
+  ENDIF
+  IF startimag-endimag<>0 THEN
+    chval&=chval& OR 1
+  ENDIF
+  IF startside-endside<>0 THEN
+    chval&=chval& OR 1
+  ENDIF
+  IF chval&=0 THEN
+    PRINT AT(1,24);"First and last frames are the same!"
+    PAUSE 50
+    SPUT picture$
+    GOTO endtravel
+  ENDIF
+  PRINT AT(1,1);"---- SELECT PATH ----"
+  fnam$=""
+  diskpath$=curdir$+"*.PI1"
+  DEFMOUSE 0
+  ~FSEL_INPUT(diskpath$,fnam$,button)
+  HIDEM
+  SPUT picture$
+  IF button=0 THEN
+    GOSUB erase_oldrect
+    GOTO endtravel
+  ENDIF
+  chrndx&=RINSTR(diskpath$,"\")
+  IF chrndx&>0 THEN
+    curdir$=LEFT$(diskpath$,chrndx&)
+  ENDIF
+  GOSUB messages("frms")
+  INPUT inp$
+  IF inp$<>"" THEN
+    frames=VAL(inp$)
+    IF frames>99 THEN
+      frames=99
+    ENDIF
+    IF frames<=1 THEN
+      GOTO endtravel
+    ENDIF
+    ' side transition exponent
+    xside=10^(LOG(endside/startside)/2/(frames-1))
+    ' lock xy to finals
+    IF fracdraw=0 THEN
+      mandr=endreal
+      mandi=endimag
+    ELSE
+      julgridr=endreal
+      julgridi=endimag
+    ENDIF
+    FOR zoomcnt=0 TO frames-1
+      IF break=0 THEN
+        num$=STR$(zoomcnt+1)
+        IF LEN(num$)=1 THEN
+          num$="0"+num$
+        ENDIF
+        IF fracdraw=0 THEN
+          fnam$="MDZOOM"
+          mandside=startside*xside^zoomcnt
+          IF mandside>endside THEN
+            GOSUB draw_mandelbrot
+          ELSE
+            mandside=endside
+            GOSUB draw_mandelbrot
+            break=1
+          ENDIF
+        ELSE
+          fnam$="JLZOOM"
+          julgridside=startside*xside^zoomcnt
+          IF julgridside>endside THEN
+            GOSUB draw_julia
+          ELSE
+            julgridside=endside
+            GOSUB draw_julia
+            break=1
+          ENDIF
+        ENDIF
+        fnam$=curdir$+fnam$+num$+".PI1"
+        GOSUB save_degas(fnam$)
+        IF INKEY$<>"" THEN
+          break=1
+        ENDIF
+      ENDIF
+    NEXT zoomcnt
+  ENDIF
+endtravel:
+  GOSUB erase_oldrect
+  PRINT AT(1,23);"End of Fractal Zoom"
+  PAUSE 75
+  GOSUB print_zoom
+RETURN
+' -------------------------------------------
+' ** Draw the mandelbrot curve **
+PROCEDURE draw_mandelbrot
+  HIDEM
+  CLS
+  PRINT AT(1,12);"Lines to calculate:"
+  time%=TIMER
+  dist=mandside/scrw&             !distance of pixels in grid
+  re=mandr-mandside/2             !left and
+  im=mandi-mandside/aspect/2      !top corner
+  PRINT AT(1,10);"Creating Mandelbrot..."
+  FOR y&=0 TO scrh&-1
+    PRINT AT(20,12);scrh&-y&;"  ";
+    ci=im+y&*dist
+    IF INKEY$<>"" THEN
+      break=1
+    ENDIF
+    IF break=0 THEN
+      FOR x&=0 TO scrw&-1
+        cr=re+x&*dist
+        zr=cr
+        zi=ci
+        CLR counter&
+        REPEAT
+          a=zr*zr
+          b=zi*zi
+          zi=2*zr*zi+ci
+          zr=a-b+cr
+          INC counter&
+        UNTIL counter&=maxiter& OR a+b>iteresc&
+        md%(x&+1,y&+1)=counter&
+      NEXT x&
+    ENDIF
+  NEXT y&
+endmandel:
+  time%=(TIMER-time%)/200
+  PRINT CHR$(7)
+  GOSUB fix_array
+  GOSUB plot_array
+  GOSUB print_time
+  DO
+  LOOP UNTIL INKEY$=""
+  GOSUB erase_oldrect
+RETURN
+' -------------------------------------------
+' ** Draw the julia curve **
+PROCEDURE draw_julia
+  HIDEM
+  CLS
+  PRINT AT(1,12);"Lines to calculate:"
+  time%=TIMER
+  dist=julgridside/scrw&             !distance of pixels in grid
+  re=julgridr-julgridside/2          !left and
+  im=julgridi-julgridside/aspect/2   !top corner
+  PRINT AT(1,10);"Creating Julia..."
+  FOR y&=0 TO scrh&-1
+    PRINT AT(20,12);scrh&-y&;"  ";
+    ci=im+y&*dist
+    IF INKEY$<>"" THEN
+      break=1
+    ENDIF
+    IF break=0 THEN
+      FOR x&=0 TO scrw&-1
+        cr=re+x&*dist
+        zr=cr
+        zi=ci
+        CLR counter&
+        REPEAT
+          a=zr*zr
+          b=zi*zi
+          zi=2*zr*zi+julnumi
+          zr=a-b+julnumr
+          INC counter&
+        UNTIL counter&=maxiter& OR a+b>iteresc&
+        md%(x&+1,y&+1)=counter&
+      NEXT x&
+    ENDIF
+  NEXT y&
+endjulia:
+  time%=(TIMER-time%)/200
+  PRINT CHR$(7)
+  GOSUB fix_array
+  GOSUB plot_array
+  GOSUB print_time
+  DO
+  LOOP UNTIL INKEY$=""
+  GOSUB erase_oldrect
+RETURN
+' -------------------------------------------
+PROCEDURE fix_array
+  PRINT AT(1,1);".....Searching low value......"
+  minval=maxiter&
+  FOR y=1 TO scrh&
+    FOR x=1 TO scrw&
+      i=md%(x,y)
+      IF i<minval THEN
+        minval=i
+        PRINT AT(1,2);"....";minval;"...."
+      ENDIF
+    NEXT x
+  NEXT y
+  PRINT AT(1,1);"......Normalizing array......."
+  minval=minval-1
+  maxval=1
+  FOR y=1 TO scrh&
+    FOR x=1 TO scrw&
+      md1%(x,y)=md%(x,y)-minval
+      IF md1%(x,y)>maxval THEN
+        maxval=md1%(x,y)
+      ENDIF
+    NEXT x
+  NEXT y
+RETURN
+' -------------------------------------------
+PROCEDURE plot_array
+  CLS
+  col_step=cols&/maxval
+  plot_xstep=stscrw&/scrw&
+  plot_ystep=stscrh&/scrh&
+  FOR y=0 TO scrh&-1
+    ploty1=y*INT(plot_ystep)
+    ploty2=ploty1+INT(plot_ystep)-1
+    FOR x=0 TO scrw&-1
+      plotx1=x*INT(plot_xstep)
+      plotx2=plotx1+INT(plot_xstep)-1
+      IF mulcol$="1" THEN
+        i=md1%(x+1,y+1)
+        IF i<maxval THEN
+          plotcolor=INT(i*col_step+1)
+          FOR y_=ploty1 TO ploty2
+            FOR x_=plotx1 TO plotx2
+              PSET x_,y_,plotcolor
+            NEXT x_
+          NEXT y_
+        ENDIF
+      ELSE
+        i=md%(x+1,y+1)
+        IF i<maxiter& THEN
+          plotcolor=1+i-INT(i/imgcols&)*imgcols&
+          FOR y_=ploty1 TO ploty2
+            FOR x_=plotx1 TO plotx2
+              PSET x_,y_,plotcolor
+            NEXT x_
+          NEXT y_
+        ENDIF
+      ENDIF
+    NEXT x
+  NEXT y
+  SGET picture$
+  IF fracdraw=0 THEN
+    SGET mandpic$
+  ENDIF
+RETURN
+' -------------------------------------------
+PROCEDURE print_time
+  min=INT(time%/60)
+  sec=time%-min*60
+  hou=INT(min/60)
+  min=min-(hou*60)
+  PRINT AT(1,24);"Time ";hou;":";min;":";sec
+  GOSUB print_zoom
+RETURN
+' -------------------------------------------
+PROCEDURE print_zoom
+  PRINT AT(1,2);"Zoom:";4/side
+  '  PRINT AT(1,24);SPC(39)
+  PRINT AT(13,24);"Select Center"
+  ' PRINT AT(1,3);"real:";real
+  ' PRINT AT(1,4);"imag:";imag
+  ' PRINT AT(1,5);"side:";side
+  ' PRINT AT(1,3);"mandr:";mandr
+  ' PRINT AT(1,4);"mandi:";mandi
+  ' PRINT AT(1,5);"mandside:";mandside
+  ' PRINT AT(1,6);"startreal:";startreal
+  ' PRINT AT(1,7);"startimag:";startimag
+  ' PRINT AT(1,8);"startside:";startside
+  ' PRINT AT(1,9);"endreal:";endreal
+  ' PRINT AT(1,10);"endimag:";endimag
+  ' PRINT AT(1,11);"endside:";endside
+RETURN
+' -------------------------------------------
+PROCEDURE set_colors
+  color=0
+  RESTORE palette
+  FOR c=0 TO cols&-1
+    READ color
+    SETCOLOR c,color
+  NEXT c
+RETURN
+' -------------------------------------------
+PROCEDURE messages(msg$)
+  PRINT AT(1,24);SPC(39)
+  SELECT msg$
+  CASE "cmod"
+    PRINT AT(1,24);"Color mode 1 or 2 (cur=";mulcol$;"):";
+  CASE "wdth"
+    PRINT AT(1,24);"Picture Width (cur=";picwidth&;"):";
+  CASE "iter"
+    PRINT AT(1,24);"How many Iterations (cur=";maxiter&;"):";
+  CASE "frms"
+    PRINT AT(1,24);"Number of frames:";
+  ENDSELECT
+RETURN
+palette:
+DATA $000,$007,$106,$205,$204,$303,$402,$501
+DATA $600,$700,$730,$740,$750,$760,$770,$777
+' -------------------------------------------
+PROCEDURE help
+  CLS
+  PRINT AT(17,1);"HELP!"
+  PRINT
+  PRINT "R:Draw full curve"
+  PRINT "P:Parameters (width=0 draws full)"
+  PRINT "O:Color plot (1=16 colors 2=all colors)"
+  PRINT "J:Create Julia under mouse "
+  PRINT "M:Return to Mandelbrot from Julia"
+  PRINT "L:Make Julia animation under the line"
+  PRINT "F:Keep first frame for zoom "
+  PRINT "Z:Keep current frame as last and"
+  PRINT "  do zoom"
+  PRINT "S:Save pic in Degas"
+  PRINT "T:Save pic in TIFF uncompressed"
+  PRINT "ESC:Quit proggy"
+  PRINT AT(8,24);"MANOSH sayz Hi! to NEXOR"
+  ~INP(2)
+  SPUT picture$
+  GOSUB erase_oldrect
+  GOSUB print_zoom
+RETURN
+' -------------------------------------------
+' -tifhead=8 bytes header-tiftail=368 bytes after rgb values-(320X200 pic ONLY)-
+tifhead:
+DATA &H49,&H49,&H2A,&H0,&HD6,&HEE,&H2,&H0
+tiftail:
+DATA &H8,&H0,&H0,&H0,&H8,&H1E,&H0,&H0,&H8,&H3C,&H0,&H0,&H8,&H5A,&H0,&H0
+DATA &H8,&H78,&H0,&H0,&H8,&H96,&H0,&H0,&H8,&HB4,&H0,&H0,&H8,&HD2,&H0,&H0
+DATA &H8,&HF0,&H0,&H0,&H8,&HE,&H1,&H0,&H8,&H2C,&H1,&H0,&H8,&H4A,&H1,&H0
+DATA &H8,&H68,&H1,&H0,&H8,&H86,&H1,&H0,&H8,&HA4,&H1,&H0,&H8,&HC2,&H1,&H0
+DATA &H8,&HE0,&H1,&H0,&H8,&HFE,&H1,&H0,&H8,&H1C,&H2,&H0,&H8,&H3A,&H2,&H0
+DATA &H8,&H58,&H2,&H0,&H8,&H76,&H2,&H0,&H8,&H94,&H2,&H0,&H8,&HB2,&H2,&H0
+DATA &H8,&HD0,&H2,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0
+DATA &H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0
+DATA &H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0
+DATA &H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0
+DATA &H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0
+DATA &H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0
+DATA &H0,&H1E,&H0,&H0,&H0,&H1E,&H0,&H0,&H8,&H0,&H8,&H0,&H8,&H0,&HD,&H0
+DATA &HFF,&H0,&H3,&H0,&H1,&H0,&H0,&H0,&H1,&H0,&H0,&H0,&H0,&H1,&H3,&H0
+DATA &H1,&H0,&H0,&H0,&H40,&H1,&H0,&H0,&H1,&H1,&H3,&H0,&H1,&H0,&H0,&H0
+DATA &HC8,&H0,&H0,&H0,&H2,&H1,&H3,&H0,&H3,&H0,&H0,&H0,&HD0,&HEE,&H2,&H0
+DATA &H3,&H1,&H3,&H0,&H1,&H0,&H0,&H0,&H1,&H0,&H0,&H0,&H6,&H1,&H3,&H0
+DATA &H1,&H0,&H0,&H0,&H2,&H0,&H0,&H0,&H11,&H1,&H4,&H0,&H19,&H0,&H0,&H0
+DATA &H8,&HEE,&H2,&H0,&H15,&H1,&H3,&H0,&H1,&H0,&H0,&H0,&H3,&H0,&H0,&H0
+DATA &H16,&H1,&H3,&H0,&H1,&H0,&H0,&H0,&H8,&H0,&H0,&H0,&H17,&H1,&H4,&H0
+DATA &H19,&H0,&H0,&H0,&H6C,&HEE,&H2,&H0,&H18,&H1,&H3,&H0,&H1,&H0,&H0,&H0
+DATA &H0,&H0,&H0,&H0,&H19,&H1,&H3,&H0,&H1,&H0,&H0,&H0,&HFF,&H0,&H0,&H0
+DATA &H1C,&H1,&H3,&H0,&H1,&H0,&H0,&H0,&H1,&H0,&H0,&H0,&H0,&H0,&H0,&H0
