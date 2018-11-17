@@ -28,9 +28,7 @@ L:Make Julia animation under the line
 
 F:Keep first frame for zoom 
 
-Z:Keep current frame as last and
-
-  do zoom
+Z:Keep current frame as last and do zoom
 
 S:Save pic in Degas
 
