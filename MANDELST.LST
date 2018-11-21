@@ -109,6 +109,7 @@ ENDIF
 IF k$="m" OR k$="M" THEN
   IF fracdraw=1 THEN
     SPUT mandpic$
+    SGET picture$
     GOSUB erase_oldrect
     real=tempr
     imag=tempi
@@ -254,6 +255,7 @@ PROCEDURE save_picture(ext$)
       GOSUB save_rgb(fnam$)
     ENDSELECT
   ENDIF
+  SPUT picture$
   GOSUB erase_oldrect
   GOSUB print_zoom
   DEFMOUSE 5
@@ -404,6 +406,13 @@ PROCEDURE make_julia_ani
   IF button=0 THEN
     GOTO endjulflm
   ENDIF
+  fn$="julani"
+  IF fnam$<>"" THEN
+    IF LEN(fnam$)>6 THEN
+      fnam$=LEFT$(fnam$,6)
+    ENDIF
+    fn$=fnam$
+  ENDIF
   chrndx&=RINSTR(diskpath$,"\")
   IF chrndx&>0 THEN
     curdir$=LEFT$(diskpath$,chrndx&)
@@ -471,25 +480,26 @@ j_f_start:
       i_step=@diff(i_start,i_end)/(frames-1)
       julnumr=r_start
       julnumi=i_start
-      FOR jfilm=1 TO frames
+      FOR jframe=1 TO frames
         IF break=0 THEN
-          num$=STR$(jfilm)
-          IF LEN(num$)=1 THEN
+          num$=STR$(jframe)
+          IF LEN(num$)<2 THEN
             num$="0"+num$
           ENDIF
-          fnam$=curdir$+"julani"+num$+".PI1"
+          fnam$=curdir$+fn$+num$+".PI1"
           GOSUB draw_julia
           GOSUB save_degas(fnam$)
           julnumr=julnumr+r_step
           julnumi=julnumi+i_step
         ENDIF
-      NEXT jfilm
+      NEXT jframe
     ENDIF
   ENDIF
 endjulflm:
   GRAPHMODE 1
   PRINT AT(1,24);"End of Julia Animation"
-  PAUSE 50
+  PAUSE 75
+  SPUT picture$
   GOSUB erase_oldrect
   GOSUB print_time
 exitjulflm:
@@ -578,7 +588,7 @@ PROCEDURE fractal_zoom
     PRINT AT(1,24);"First and last frames are the same!"
     PAUSE 50
     SPUT picture$
-    GOTO endtravel
+    GOTO endzoom
   ENDIF
   PRINT AT(1,1);"---- SELECT PATH ----"
   fnam$=""
@@ -589,7 +599,18 @@ PROCEDURE fractal_zoom
   SPUT picture$
   IF button=0 THEN
     GOSUB erase_oldrect
-    GOTO endtravel
+    GOTO endzoom
+  ENDIF
+  IF fracdraw=0 THEN
+    fn$="MDZOOM"
+  ELSE
+    fn$="JLZOOM"
+  ENDIF
+  IF fnam$<>"" THEN
+    IF LEN(fnam$)>6 THEN
+      fnam$=LEFT$(fnam$,6)
+    ENDIF
+    fn$=fnam$
   ENDIF
   chrndx&=RINSTR(diskpath$,"\")
   IF chrndx&>0 THEN
@@ -603,7 +624,7 @@ PROCEDURE fractal_zoom
       frames=99
     ENDIF
     IF frames<=1 THEN
-      GOTO endtravel
+      GOTO endzoom
     ENDIF
     ' side transition exponent
     xside=10^(LOG(endside/startside)/2/(frames-1))
@@ -618,11 +639,10 @@ PROCEDURE fractal_zoom
     FOR zoomcnt=0 TO frames-1
       IF break=0 THEN
         num$=STR$(zoomcnt+1)
-        IF LEN(num$)=1 THEN
+        IF LEN(num$)<2 THEN
           num$="0"+num$
         ENDIF
         IF fracdraw=0 THEN
-          fnam$="MDZOOM"
           mandside=startside*xside^zoomcnt
           IF mandside>endside THEN
             GOSUB draw_mandelbrot
@@ -632,7 +652,6 @@ PROCEDURE fractal_zoom
             break=1
           ENDIF
         ELSE
-          fnam$="JLZOOM"
           julgridside=startside*xside^zoomcnt
           IF julgridside>endside THEN
             GOSUB draw_julia
@@ -642,7 +661,7 @@ PROCEDURE fractal_zoom
             break=1
           ENDIF
         ENDIF
-        fnam$=curdir$+fnam$+num$+".PI1"
+        fnam$=curdir$+fn$+num$+".PI1"
         GOSUB save_degas(fnam$)
         IF INKEY$<>"" THEN
           break=1
@@ -650,10 +669,11 @@ PROCEDURE fractal_zoom
       ENDIF
     NEXT zoomcnt
   ENDIF
-endtravel:
-  GOSUB erase_oldrect
+endzoom:
   PRINT AT(1,23);"End of Fractal Zoom"
   PAUSE 75
+  SPUT picture$
+  GOSUB erase_oldrect
   GOSUB print_zoom
 RETURN
 ' -------------------------------------------
@@ -776,31 +796,31 @@ PROCEDURE plot_array
   plot_xstep=stscrw&/scrw&
   plot_ystep=stscrh&/scrh&
   FOR y=0 TO scrh&-1
-    ploty1=y*INT(plot_ystep)
-    ploty2=ploty1+INT(plot_ystep)-1
+    ploty1=y*plot_ystep
+    ploty2=ploty1+plot_ystep
     FOR x=0 TO scrw&-1
-      plotx1=x*INT(plot_xstep)
-      plotx2=plotx1+INT(plot_xstep)-1
+      plotx1=x*plot_xstep
+      plotx2=plotx1+plot_xstep
+      plotcolor=0
       IF mulcol$="1" THEN
         i=md1%(x+1,y+1)
         IF i<maxval THEN
           plotcolor=INT(i*col_step+1)
-          FOR y_=ploty1 TO ploty2
-            FOR x_=plotx1 TO plotx2
-              PSET x_,y_,plotcolor
-            NEXT x_
-          NEXT y_
         ENDIF
       ELSE
         i=md%(x+1,y+1)
         IF i<maxiter& THEN
           plotcolor=1+i-INT(i/imgcols&)*imgcols&
-          FOR y_=ploty1 TO ploty2
-            FOR x_=plotx1 TO plotx2
-              PSET x_,y_,plotcolor
-            NEXT x_
-          NEXT y_
         ENDIF
+      ENDIF
+      IF scrw&=stscrw& THEN
+        PSET x,y,plotcolor
+      ELSE
+        FOR y_=INT(ploty1) TO INT(ploty2)-1
+          FOR x_=INT(plotx1) TO INT(plotx2)-1
+            PSET x_,y_,plotcolor
+          NEXT x_
+        NEXT y_
       ENDIF
     NEXT x
   NEXT y
@@ -815,13 +835,25 @@ PROCEDURE print_time
   sec=time%-min*60
   hou=INT(min/60)
   min=min-(hou*60)
-  PRINT AT(1,24);"Time ";hou;":";min;":";sec
+  hou$=STR$(hou)
+  min$=STR$(min)
+  sec$=STR$(sec)
+  IF LEN(hou$)<2 THEN
+    hou$="0"+hou$
+  ENDIF
+  IF LEN(min$)<2 THEN
+    min$="0"+min$
+  ENDIF
+  IF LEN(sec$)<2 THEN
+    sec$="0"+sec$
+  ENDIF
+  PRINT AT(1,24);"Time ";hou$;":";min$;":";sec$
   GOSUB print_zoom
 RETURN
 ' -------------------------------------------
 PROCEDURE print_zoom
   PRINT AT(1,2);"Zoom:";4/side
-  PRINT AT(13,24);"Select Center"
+  PRINT AT(15,24);"Select Center"
 RETURN
 ' -------------------------------------------
 PROCEDURE set_colors
