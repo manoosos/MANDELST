@@ -406,8 +406,12 @@ PROCEDURE make_julia_ani
   IF button=0 THEN
     GOTO endjulflm
   ENDIF
-  fn$="julani"
+  fn$="JULANI"
   IF fnam$<>"" THEN
+    chrndx&=RINSTR(fnam$,".")
+    IF chrndx&>0 THEN
+      fnam$=LEFT$(fnam$,chrndx&-1)
+    ENDIF
     IF LEN(fnam$)>6 THEN
       fnam$=LEFT$(fnam$,6)
     ENDIF
@@ -607,6 +611,10 @@ PROCEDURE fractal_zoom
     fn$="JLZOOM"
   ENDIF
   IF fnam$<>"" THEN
+    chrndx&=RINSTR(fnam$,".")
+    IF chrndx&>0 THEN
+      fnam$=LEFT$(fnam$,chrndx&-1)
+    ENDIF
     IF LEN(fnam$)>6 THEN
       fnam$=LEFT$(fnam$,6)
     ENDIF
