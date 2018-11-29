@@ -896,7 +896,7 @@ PROCEDURE help
   PRINT
   PRINT "R:Draw full curve"
   PRINT "P:Parameters (width='max' draws full)"
-  PRINT "O:Color plot (1=16 colors 2=all colors)"
+  PRINT "C:Color plot (1=16 colors 2=all colors)"
   PRINT "J:Create Julia under mouse "
   PRINT "M:Return to Mandelbrot from Julia"
   PRINT "L:Make Julia animation under the line"
