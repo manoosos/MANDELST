@@ -18,7 +18,7 @@ R:Draw full curve
 
 P:Parameters (width='max' draws full)
 
-O:Color plot (1=16 colors 2=all colors)
+C:Color plot (1=16 colors 2=all colors)
 
 J:Create Julia under mouse 
 
